@@ -128,14 +128,15 @@ run_KmedoidsSC_row <- function(dataset, target_cardinality, dataset_name) {
   
   exec_time <- as.numeric(difftime(end_algo, start_algo, units = "secs"))
   y_int <- as.integer(y)
+  y_predict <- result$y_predict
   
   metrics <- compute_metrics(y, y_predict, X)
   
   data.frame(
     name = dataset_name,
-    n = length(result$y_predict),
-    k = length(unique(result$y_predict)),
-    y_predict = paste(as.integer(result$y_predict), collapse = " "),
+    n = length(y_predict),
+    k = length(unique(y_predict)),
+    y_predict = paste(as.integer(y_predict), collapse = " "),
     y_true = paste(y_int, collapse = " "),
     target_cardinality = paste(as.integer(target_cardinality), collapse = " "),
     Execution_Time = exec_time,
