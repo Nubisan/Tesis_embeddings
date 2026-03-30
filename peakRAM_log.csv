@@ -1,2 +1,10 @@
 "Function_Call","Elapsed_Time_sec","Total_RAM_Used_MiB","Peak_RAM_Used_MiB","Algoritmo","Fecha"
 "source(archivo_algoritmo,local=TRUE)",2.94000000000005,14.7,36.9,"HCAKC.R",2026-03-30 13:17:43.594332
+"source(archivo_algoritmo,local=TRUE)",4.64,16.6,34,"Kmedoids.R",2026-03-30 13:23:46.198023
+"source(archivo_algoritmo,local=TRUE)",4.72,16.7,46.4,"CSCLP.R",2026-03-30 13:23:46.292699
+"source(archivo_algoritmo,local=TRUE)",4.75,16.7,43.9,"SCK1_final.R",2026-03-30 13:23:46.399387
+"source(archivo_algoritmo,local=TRUE)",4.84,16.7,34.1,"HCAKC.R",2026-03-30 13:23:46.479524
+"source(archivo_algoritmo,local=TRUE)",5.19,16.7,57.6,"KM-MILP.R",2026-03-30 13:23:46.673341
+"source(archivo_algoritmo,local=TRUE)",7.46,17.6,57.7,"PSO.R",2026-03-30 13:23:48.849591
+"source(archivo_algoritmo,local=TRUE)",17.14,16.9,57.7,"Bat.R",2026-03-30 13:23:58.448362
+"source(archivo_algoritmo,local=TRUE)",40.16,15.4,57.8,"ACO.R",2026-03-30 13:24:21.491554
