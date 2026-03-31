@@ -167,9 +167,9 @@ run_clustering_row <- function(dataset, target_cardinality, dataset_name, seed =
   y_predict <- res$assignments
   y_int <- as.integer(y)
   
-  metrics <- compute_metrics(y, y_predict, X)
-  
   total_time <- (proc.time() - start_total)[3]
+  
+  metrics <- compute_metrics(y, y_predict, X)
   
   data.frame(
     name = dataset_name,

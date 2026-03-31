@@ -255,16 +255,15 @@ run_clustering_row <- function(dataset, target_cardinality, dataset_name) {
   start_total <- proc.time() 
   
   results <- tryCatch(run_bat_algorithm(X, y, as.integer(target_cardinality)), error = function(e) NULL)
-  end_algo <- Sys.time()
   
   if (is.null(results) || is.null(results$best_solution)) return(NULL)
   
   y_predict <- results$best_solution
   y_int <- as.integer(y)
   
-  metrics <- compute_metrics(y, y_predict, X)
-  
   total_time <- (proc.time() - start_total)[3]
+  
+  metrics <- compute_metrics(y, y_predict, X)
   
   data.frame(
     name = dataset_name,

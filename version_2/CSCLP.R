@@ -125,12 +125,16 @@ run_CSCLP_algo <- function(dataset, target_cardinality, dist_method = "cosine", 
   rhs <- c(b_point, b_card)
   dir <- rep("==", nrow(A))
   
+  start_total <- proc.time() 
+  
   result_lp <- lp(direction = "min",
                   objective.in = f,
                   const.mat = A,
                   const.dir = dir,
                   const.rhs = rhs,
                   all.bin = TRUE)
+  
+  total_time <- (proc.time() - start_total)[3]
   
   if (result_lp$status != 0) stop(paste0("ILP infeasible/failed. status=", result_lp$status))
   
@@ -149,7 +153,8 @@ run_CSCLP_algo <- function(dataset, target_cardinality, dist_method = "cosine", 
   list(
     y_predict = y_predict,
     y = y,
-    X = X
+    X = X,
+    Execution_Time = total_time
   )
 }
 
@@ -158,17 +163,14 @@ run_CSCLP_algo <- function(dataset, target_cardinality, dist_method = "cosine", 
 # -----------------------------------------------------------------------------
 run_clustering_row <- function(dataset, target_cardinality, dataset_name) {
   
-  start_total <- proc.time()
-  
   result <- run_CSCLP_algo(dataset, target_cardinality)
   
   y_predict <- result$y_predict
   y_true <- as.integer(result$y)
   X <- result$X
+  total_time = result$Execution_Time
   
   metrics <- compute_metrics(y_true, y_predict, X)
-  
-  total_time <- (proc.time() - start_total)[3]
   
   data.frame(
     name = dataset_name,

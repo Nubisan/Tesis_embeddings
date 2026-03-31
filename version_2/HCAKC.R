@@ -163,9 +163,9 @@ run_clustering_row <- function(dataset, target_cardinality, dataset_name) {
   
   y_int <- as.integer(y)
   
-  metrics <- compute_metrics(y, clusters, X)
-  
   total_time <- (proc.time() - start_total)[3]
+  
+  metrics <- compute_metrics(y, clusters, X)
   
   data.frame(
     name = dataset_name,
