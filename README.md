@@ -1,4 +1,3 @@
-Descarga y muestreo de datasets desde OpenML
 Este módulo permite descargar datasets desde OpenML y generar subconjuntos de datos para experimentación en algoritmos de clustering.
 ---
 ⚙️ Instalación
@@ -18,6 +17,7 @@ pip install -r requirements.txt
 ```
 ---
 🧩 Configuración
+
 El comportamiento del script se define mediante el archivo:
 datasets_config.json
 Parámetros
