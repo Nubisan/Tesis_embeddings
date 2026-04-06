@@ -5,8 +5,8 @@
     "random_state": 42
   },
   "groups": {
-    "estandar": ["CIFAR-10", "STL-10", "CIFAR-100"],
-    "baratos": ["COIL-100", "USPS", "MNIST", "Fashion-MNIST"],
-    "costosos": ["ImageNet-10", "CUB-200"]
+    "1": ["CIFAR-10", "STL-10", "CIFAR-100"],
+    "2": ["COIL-100", "USPS", "MNIST", "Fashion-MNIST"],
+    "3": ["ImageNet-10", "CUB-200"]
   }
 }
