@@ -21,10 +21,15 @@ pip install -r requirements.txt
 El comportamiento del script se define mediante el archivo:
 datasets_config.json
 Parámetros
+
 max_rows: número máximo de instancias a usar por dataset
+
 output_dir: carpeta donde se guardarán los datos generados
+
 random_state: semilla para reproducibilidad
+
 groups: conjuntos de datasets organizados por tipo
+
 Ejemplo:
 ```json
 {
