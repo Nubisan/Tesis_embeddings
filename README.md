@@ -1,5 +1,4 @@
-Este módulo permite descargar datasets desde OpenML y generar subconjuntos de datos para experimentación en algoritmos de clustering.
----
+
 ⚙️ Instalación
 1. Crear entorno virtual
 ```bash
@@ -20,6 +19,7 @@ pip install -r requirements.txt
 
 El comportamiento del script se define mediante el archivo:
 datasets_config.json
+
 Parámetros
 
 max_rows: número máximo de instancias a usar por dataset
