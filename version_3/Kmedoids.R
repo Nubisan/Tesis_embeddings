@@ -1,14 +1,27 @@
 # ==============================================================================
-# PSO.R — PSO con Restricciones de Cardinalidad
+# KMEDOIDS.R — K-Medoids con Restricciones de Tamaño (K-MedoidsSC)
 # ==============================================================================
 
 library(cluster)
-library(pso)
 library(proxy)
 library(dplyr)
 
 if (!requireNamespace("aricode", quietly = TRUE)) install.packages("aricode")
 library(aricode)
+
+# -----------------------------
+# Registro interno de hiperparámetros (solo en memoria)
+# Consultar: .kmedoids_hyperparams$global / .kmedoids_hyperparams$runs[["nombre"]]
+# -----------------------------
+.kmedoids_hyperparams <- list(
+  global = list(
+    algorithm          = "K-MedoidsSC",
+    distance_method    = "cosine",
+    medoid_init        = "pam",
+    assignment_method  = "sorted_greedy"
+  ),
+  runs = list()
+)
 
 compute_metrics <- function(y_true, y_predict, X) {
   y_true_int    <- as.integer(as.factor(y_true))
@@ -27,7 +40,7 @@ compute_metrics <- function(y_true, y_predict, X) {
 
 # Salida
 dir.create("predictions", showWarnings = FALSE, recursive = FALSE)
-.pred_pso_csv <- "predictions/pred_PSO.csv"
+.pred_KMEDOIDS_csv <- "predictions/pred_KMEDOIDS.csv"
 
 # -----------------------------
 # Helpers robustos
@@ -49,7 +62,6 @@ make_numeric_X <- function(X) {
   
   X_num <- as.data.frame(X_num)
   
-  # Eliminar columnas constantes
   X_num <- X_num[, vapply(X_num, function(z) length(unique(z)) > 1, logical(1)), drop = FALSE]
   if (ncol(X_num) == 0) return(NULL)
   
@@ -75,76 +87,36 @@ prepare_data <- function(dataset) {
 }
 
 # -----------------------------
-# PSO
+# SC_medoids (lógica original)
+# OPT: D_C = D[, C] se calcula una sola vez (antes se calculaba 2 veces)
+# OPT: y_predict = cl directamente (el loop final era redundante: cl ya tiene 1:k)
 # -----------------------------
-run_PSO <- function(X, target_cardinality) {
+SC_medoids <- function(D, k, E, C = NULL) {
+  if (is.null(C)) C <- sample(1:nrow(D), k)
   
-  set.seed(123)
-  Xmat <- as.matrix(X)
+  # OPT: calcular D[, C] una sola vez
+  D_C <- D[, C, drop = FALSE]
   
-  if (!all(is.finite(Xmat))) stop("X contiene NA/Inf")
-  if (!all(vapply(as.data.frame(Xmat), is.numeric, logical(1)))) stop("X debe ser numérico")
+  cl <- max.col(-D_C)
+  sorted_points <- order(apply(D_C, 1, min))
   
-  n <- nrow(Xmat)
-  k <- length(target_cardinality)
-  
-  if (k < 2) stop("k < 2")
-  if (sum(target_cardinality) != n) stop("sum(target_cardinality) != n (inconsistente)")
-  
-  D <- as.matrix(proxy::dist(Xmat, method = "cosine"))
-  
-  cost_function <- function(par, dist_matrix, cluster_sizes, k) {
-    n <- length(par)
-    cluster_assignment <- integer(n)
-    
-    ord <- order(par)
-    start_idx <- 1
-    for (i in 1:k) {
-      end_idx <- start_idx + cluster_sizes[i] - 1
-      cluster_assignment[ord[start_idx:end_idx]] <- i
-      start_idx <- end_idx + 1
-    }
-    
-    total_distance <- 0
-    for (i in 1:k) {
-      ci <- which(cluster_assignment == i)
-      if (length(ci) > 1) {
-        cd <- dist_matrix[ci, ci, drop = FALSE]
-        total_distance <- total_distance + sum(cd[lower.tri(cd, diag = FALSE)])
-      }
-    }
-    total_distance
+  for (i in seq_len(k)) {
+    cl[sorted_points[1:E[i]]] <- i
+    sorted_points <- sorted_points[-(1:E[i])]
   }
   
-  pso_result <- psoptim(
-    par = runif(n),
-    fn = cost_function,
-    dist_matrix = D,
-    cluster_sizes = as.integer(target_cardinality),
-    k = k,
-    lower = 0,
-    upper = 1,
-    control = list(maxit = 20, s = 40)
-  )
-  
-  label_pred <- integer(n)
-  ord <- order(pso_result$par)
-  start_idx <- 1
-  for (i in 1:k) {
-    end_idx <- start_idx + target_cardinality[i] - 1
-    label_pred[ord[start_idx:end_idx]] <- i
-    start_idx <- end_idx + 1
+  for (point in sorted_points) {
+    cl[point] <- which.min(D[point, C])
   }
   
-  list(y_predict = label_pred)
+  # OPT: cl ya contiene valores 1:k, no necesita loop de reasignación
+  list(medoids = C, clustering = cl, y_predict = as.numeric(cl))
 }
 
 # -----------------------------
 # Runner: devuelve fila
 # -----------------------------
-run_clustering_row <- function(dataset, target_cardinality, dataset_name) {
-  
-  set.seed(123)
+run_KmedoidsSC_row <- function(dataset, target_cardinality, dataset_name) {
   data <- prepare_data(dataset)
   if (is.null(data)) return(NULL)
   
@@ -152,30 +124,46 @@ run_clustering_row <- function(dataset, target_cardinality, dataset_name) {
   y <- data$y
   
   if (is.null(target_cardinality) || all(is.na(target_cardinality))) return(NULL)
-  target_cardinality <- as.integer(target_cardinality)
-  
   if (sum(target_cardinality) != nrow(X)) return(NULL)
-  if (length(target_cardinality) < 2) return(NULL)
+  
+  k <- length(target_cardinality)
+  if (k < 2) return(NULL)
   
   start_total <- proc.time()
   
-  results <- tryCatch(run_PSO(X, target_cardinality), error = function(e) NULL)
+  D <- proxy::dist(as.matrix(X), method = "cosine")
+  D <- as.matrix(D)
   
-  if (is.null(results) || is.null(results$y_predict)) return(NULL)
+  pam_result <- pam(X, k)
+  C <- pam_result$id.med
   
-  y_predict <- results$y_predict
+  result <- SC_medoids(D, k, as.integer(target_cardinality), C)
+  
   y_int <- as.integer(y)
+  y_predict <- result$y_predict
   
   total_time <- (proc.time() - start_total)[3]
   
   metrics <- compute_metrics(y, y_predict, X)
+  
+  # Guardar hiperparámetros de esta ejecución (solo en memoria)
+  .kmedoids_hyperparams$runs[[dataset_name]] <<- list(
+    k                = k,
+    n                = length(y_predict),
+    n_features       = ncol(as.matrix(X)),
+    target_sizes     = as.integer(target_cardinality),
+    medoid_indices   = result$medoids,
+    distance_method  = "cosine",
+    medoid_init      = "pam",
+    assignment_method = "sorted_greedy"
+  )
   
   data.frame(
     name = dataset_name,
     n = length(y_predict),
     k = length(unique(y_predict)),
     y_predict = paste(as.integer(y_predict), collapse = " "),
-    y_true = paste(as.integer(y_int), collapse = " "),
+    y_true = paste(y_int, collapse = " "),
     target_cardinality = paste(as.integer(target_cardinality), collapse = " "),
     cardinality_pred   = paste(as.integer(table(factor(y_predict,
                                                        levels = 1:length(target_cardinality)))), collapse = " "),
@@ -190,11 +178,12 @@ run_clustering_row <- function(dataset, target_cardinality, dataset_name) {
 
 # -----------------------------
 # Loop principal
+# OPT: pre-asignar lista, seq_len, vapply
 # -----------------------------
-results_list <- list()
+results_list <- vector("list", nrow(odatasets_unique))
 
-for (i in 1:nrow(odatasets_unique)) {
-  cat("\n\n--- Executing PSO for dataset at position:", i, "---\n")
+for (i in seq_len(nrow(odatasets_unique))) {
+  cat("\n\n--- Executing KMEDOIDS for dataset at position:", i, "---\n")
   
   tryCatch({
     dataset <- odatasets_unique$dataset[[i]]
@@ -206,7 +195,7 @@ for (i in 1:nrow(odatasets_unique)) {
       next
     }
     
-    row_result <- run_clustering_row(dataset, target_cardinality, dataset_name)
+    row_result <- run_KmedoidsSC_row(dataset, target_cardinality, dataset_name)
     
     if (!is.null(row_result)) {
       results_list[[i]] <- row_result
@@ -216,19 +205,21 @@ for (i in 1:nrow(odatasets_unique)) {
     }
     
   }, error = function(e) {
-    cat("Error:", e$message, "\n")
+    cat("Error processing dataset at position", i, ":", e$message, "\n")
   })
 }
 
 # -----------------------------
 # Escritura final
 # -----------------------------
-results_clean <- results_list[!sapply(results_list, is.null)]
+results_clean <- results_list[!vapply(results_list, is.null, logical(1))]
 
 if (length(results_clean) > 0) {
   final_df <- do.call(rbind, results_clean)
-  write.table(final_df, .pred_pso_csv, sep = ",", row.names = FALSE, col.names = TRUE)
-  cat("\nPSO finalizado. Archivo guardado exitosamente en:", .pred_pso_csv, "\n")
+  write.table(final_df, .pred_KMEDOIDS_csv,
+              sep = ",", row.names = FALSE, col.names = TRUE)
+  cat("\nK-Medoids finalizado. Archivo guardado exitosamente en:",
+      .pred_KMEDOIDS_csv, "\n")
 } else {
-  cat("\nPSO finalizado sin resultados válidos. No se creó el CSV.\n")
+  cat("\nK-Medoids finalizado sin resultados válidos. No se creó el CSV.\n")
 }

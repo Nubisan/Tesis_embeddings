@@ -19,7 +19,7 @@ filter_unique_datasets_metadata <- function(dataset) {
 
 load_dataset <- function(id) {
   
-  local_path <- file.path("datasets_local", paste0("dataset_", id, ".rds"))
+  local_path <- file.path("..","datasets_local", paste0("dataset_", id, ".rds"))
   
   if (file.exists(local_path)) {
     return(readRDS(local_path))

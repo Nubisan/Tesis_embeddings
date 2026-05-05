@@ -78,7 +78,7 @@ Execute_Test <- function(numalt) {
     
     resultados <- future_lapply(opciones, function(x) {
       run_algoritmo_future(x, odatasets_unique)
-    }, future.seed = TRUE)
+    }, future.seed = 123)
     
     message("\n--- Resumen de Ejecución ---")
     print(unlist(resultados))

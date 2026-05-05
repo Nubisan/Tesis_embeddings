@@ -1,6 +1,19 @@
 # ==============================================================================
 # Gráfico — ARI, AMI, NMI por dataset (un panel por dataset)
 # ==============================================================================
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(readr)
+
+# Cargar todos los pred_*.csv y combinarlos
+archivos <- list.files("predictions_secuencial", pattern = "^pred_.*\\.csv$", full.names = TRUE)
+
+datos <- lapply(archivos, function(f) {
+  df <- read_csv(f, show_col_types = FALSE)
+  df$algoritmo <- gsub("^pred_|\\.csv$", "", basename(f))
+  df
+}) |> bind_rows()
 
 resumen_dataset <- datos |>
   group_by(algoritmo, name) |>
@@ -42,7 +55,7 @@ ggplot(resumen_dataset, aes(x = reorder(algoritmo, valor),
     strip.background = element_rect(fill = "gray92", color = NA)
   )
 
-ggsave("grafico_metricas_por_dataset.png", width = 12, height = 7 * n_distinct(datos$name), 
+ggsave("grafico_metricas_secuencial.png", width = 12, height = 7 * n_distinct(datos$name), 
        dpi = 300, limitsize = FALSE)
 
 # ==============================================================================
@@ -87,6 +100,6 @@ ggplot(resumen_sil_dataset, aes(x = reorder(algoritmo, Silhouette),
     strip.background = element_rect(fill = "gray92", color = NA)
   )
 
-ggsave("grafico_silhouette_por_dataset.png", width = 12, 
+ggsave("grafico_silhouette_secuencial.png", width = 12, 
        height = 5 * n_distinct(datos$name),
        dpi = 300, limitsize = FALSE)

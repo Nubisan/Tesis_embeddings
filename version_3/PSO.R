@@ -10,6 +10,24 @@ library(dplyr)
 if (!requireNamespace("aricode", quietly = TRUE)) install.packages("aricode")
 library(aricode)
 
+# -----------------------------
+# Registro interno de hiperparámetros (solo en memoria)
+# Consultar: .pso_hyperparams$global / .pso_hyperparams$runs[["nombre"]]
+# -----------------------------
+.pso_hyperparams <- list(
+  global = list(
+    algorithm          = "PSO",
+    distance_method    = "cosine",
+    pso_maxit          = 20L,
+    pso_swarm_size     = 40L,
+    par_lower          = 0,
+    par_upper          = 1,
+    objective          = "intra_cluster_cosine_distance",
+    assignment_method  = "order_based_partition"
+  ),
+  runs = list()
+)
+
 compute_metrics <- function(y_true, y_predict, X) {
   y_true_int    <- as.integer(as.factor(y_true))
   y_predict_int <- as.integer(y_predict)
@@ -49,7 +67,6 @@ make_numeric_X <- function(X) {
   
   X_num <- as.data.frame(X_num)
   
-  # Eliminar columnas constantes
   X_num <- X_num[, vapply(X_num, function(z) length(unique(z)) > 1, logical(1)), drop = FALSE]
   if (ncol(X_num) == 0) return(NULL)
   
@@ -76,6 +93,8 @@ prepare_data <- function(dataset) {
 
 # -----------------------------
 # PSO
+# OPT: pre-calcular cumsum de cluster_sizes para asignación sin loop
+# OPT: cost_function usa la cumsum pre-calculada
 # -----------------------------
 run_PSO <- function(X, target_cardinality) {
   
@@ -93,16 +112,19 @@ run_PSO <- function(X, target_cardinality) {
   
   D <- as.matrix(proxy::dist(Xmat, method = "cosine"))
   
+  # OPT: pre-calcular los índices de corte para evitar loop en cost_function
+  cs_sizes <- as.integer(target_cardinality)
+  cum_sizes <- cumsum(cs_sizes)
+  start_positions <- c(1L, cum_sizes[-k] + 1L)
+  
   cost_function <- function(par, dist_matrix, cluster_sizes, k) {
     n <- length(par)
     cluster_assignment <- integer(n)
     
     ord <- order(par)
-    start_idx <- 1
+    # OPT: usar start/end pre-calculados
     for (i in 1:k) {
-      end_idx <- start_idx + cluster_sizes[i] - 1
-      cluster_assignment[ord[start_idx:end_idx]] <- i
-      start_idx <- end_idx + 1
+      cluster_assignment[ord[start_positions[i]:cum_sizes[i]]] <- i
     }
     
     total_distance <- 0
@@ -120,7 +142,7 @@ run_PSO <- function(X, target_cardinality) {
     par = runif(n),
     fn = cost_function,
     dist_matrix = D,
-    cluster_sizes = as.integer(target_cardinality),
+    cluster_sizes = cs_sizes,
     k = k,
     lower = 0,
     upper = 1,
@@ -129,11 +151,9 @@ run_PSO <- function(X, target_cardinality) {
   
   label_pred <- integer(n)
   ord <- order(pso_result$par)
-  start_idx <- 1
-  for (i in 1:k) {
-    end_idx <- start_idx + target_cardinality[i] - 1
-    label_pred[ord[start_idx:end_idx]] <- i
-    start_idx <- end_idx + 1
+  # OPT: usar start/end pre-calculados
+  for (i in seq_len(k)) {
+    label_pred[ord[start_positions[i]:cum_sizes[i]]] <- i
   }
   
   list(y_predict = label_pred)
@@ -170,6 +190,20 @@ run_clustering_row <- function(dataset, target_cardinality, dataset_name) {
   
   metrics <- compute_metrics(y, y_predict, X)
   
+  # Guardar hiperparámetros de esta ejecución (solo en memoria)
+  .pso_hyperparams$runs[[dataset_name]] <<- list(
+    k                = length(target_cardinality),
+    n                = length(y_predict),
+    n_features       = ncol(as.matrix(X)),
+    target_sizes     = target_cardinality,
+    pso_maxit        = 20L,
+    pso_swarm_size   = 40L,
+    par_lower        = 0,
+    par_upper        = 1,
+    distance_method  = "cosine",
+    assignment_method = "order_based_partition"
+  )
+  
   data.frame(
     name = dataset_name,
     n = length(y_predict),
@@ -190,10 +224,11 @@ run_clustering_row <- function(dataset, target_cardinality, dataset_name) {
 
 # -----------------------------
 # Loop principal
+# OPT: pre-asignar lista, seq_len, vapply
 # -----------------------------
-results_list <- list()
+results_list <- vector("list", nrow(odatasets_unique))
 
-for (i in 1:nrow(odatasets_unique)) {
+for (i in seq_len(nrow(odatasets_unique))) {
   cat("\n\n--- Executing PSO for dataset at position:", i, "---\n")
   
   tryCatch({
@@ -223,7 +258,7 @@ for (i in 1:nrow(odatasets_unique)) {
 # -----------------------------
 # Escritura final
 # -----------------------------
-results_clean <- results_list[!sapply(results_list, is.null)]
+results_clean <- results_list[!vapply(results_list, is.null, logical(1))]
 
 if (length(results_clean) > 0) {
   final_df <- do.call(rbind, results_clean)
