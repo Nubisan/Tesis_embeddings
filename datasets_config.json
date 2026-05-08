@@ -1,12 +1,11 @@
 {
   "defaults": {
-    "max_rows": 500,
+    "max_rows": 400,
     "output_dir": "data/openml_samples",
     "random_state": 42
   },
   "groups": {
-    "1": ["CIFAR-10", "STL-10", "CIFAR-100"],
-    "2": ["COIL-100", "USPS", "MNIST", "Fashion-MNIST"],
-    "3": ["ImageNet-10", "CUB-200"]
+    "imagenes": ["Olivetti_Faces", "USPS", "mnist_784"],
+    "texto": ["sms-spam-collection"]
   }
 }
