@@ -2,18 +2,12 @@
 algorithms/bat.py
 =================
 Algoritmo de clustering BAT (metaheurístico inspirado en murciélagos).
-Migración Python del archivo Bat.R.
 
 Estructura del algoritmo:
   - 30 murciélagos exploran el espacio durante 20 iteraciones
   - Inicialización: K-means + ajuste de cardinalidad por centroide cercano
   - Función objetivo: silhouette (coseno) - penalty por desviación de cardinalidad
   - Distancia coseno precomputada N×N para evitar recálculos
-
-Diferencias inherentes con R (no son bugs, son limitaciones físicas):
-  - NumPy PCG64 ≠ R Mersenne Twister, aún con misma semilla
-  - sklearn KMeans (Lloyd/Elkan) ≠ R kmeans (Hartigan-Wong)
-  Las métricas resultantes deben quedar en rangos comparables.
 """
 
 from __future__ import annotations
@@ -34,6 +28,7 @@ from ._common import (
     calculate_centroids,
     compute_metrics,
     evaluate_solution,
+    get_predictions_dir,
     prepare_data,
     tabulate_clusters,
     to_int_list,
@@ -89,10 +84,8 @@ BAT_HYPERPARAMS: dict[str, Any] = {
     "runs":   {},
 }
 
-PROJECT_ROOT    = Path(__file__).resolve().parent.parent
-PREDICTIONS_DIR = PROJECT_ROOT / "predictions"
-PREDICTIONS_DIR.mkdir(parents=True, exist_ok=True)
-PRED_BAT_CSV    = PREDICTIONS_DIR / "pred_BAT.csv"
+# La ruta de salida se obtiene en runtime via get_predictions_dir()
+# de _common, que lee la env var CLUSTERING_MODEL seteada por testing.py.
 
 
 # ============================================================================
@@ -329,7 +322,8 @@ def run(odatasets_unique: pd.DataFrame) -> None:
 
     if results:
         df_out = pd.DataFrame(results)
-        df_out.to_csv(PRED_BAT_CSV, index=False)
-        print(f"\nBAT Algorithm finalizado. Archivo guardado en: {PRED_BAT_CSV}")
+        out_path = get_predictions_dir() / "pred_BAT.csv"
+        df_out.to_csv(out_path, index=False)
+        print(f"\nBAT Algorithm finalizado. Archivo guardado en: {out_path}")
     else:
         print("\nBAT Algorithm finalizado sin resultados válidos.")

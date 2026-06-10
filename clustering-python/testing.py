@@ -1,7 +1,7 @@
 """
 testing.py
 ==========
-Orquestador principal. Equivalente a Testing.R.
+Orquestador principal.
 
 Modos de uso:
 
@@ -20,6 +20,10 @@ Modos de uso:
   python testing.py 9 --model internvl
 
 Si el flag --model se omite, por defecto usa clip.
+
+Los CSVs de resultados se guardan automáticamente en `predictions/<modelo>/`,
+gracias a que testing.py setea la variable de entorno CLUSTERING_MODEL antes
+de invocar a cada algoritmo, y `_common.get_predictions_dir()` la lee.
 """
 
 from __future__ import annotations
@@ -72,8 +76,16 @@ PEAK_RAM_CSV = PROJECT_ROOT / "peakRAM_log.csv"
 
 
 # ============================================================================
-# Helpers de logging de RAM
+# Helpers
 # ============================================================================
+
+def _set_active_model(model: str) -> None:
+    """
+    Setea la variable de entorno que los algoritmos leerán para saber
+    dónde guardar sus CSVs.
+    """
+    os.environ["CLUSTERING_MODEL"] = model.lower()
+
 
 def _measure_peak_ram(func, *args, **kwargs) -> tuple[Any, float, float]:
     """
@@ -140,9 +152,14 @@ def _run_one_algorithm_in_subprocess(
     Worker para joblib: ejecuta UN algoritmo de forma independiente.
     Carga sus propios datos (no serializa el DataFrame entre procesos —
     eso sería más lento por la matriz de embeddings).
+
+    IMPORTANTE: cada worker es un proceso separado, así que tenemos que
+    re-setear la variable de entorno aquí (no se hereda del padre porque
+    joblib/loky no copia el environment dinámicamente).
     """
     name, module_path = ALGORITHMS[numalt]
     try:
+        _set_active_model(model)  # crítico: re-setear en el subproceso
         odatasets_unique = load_all_datasets(model=model)
         module = importlib.import_module(module_path)
         result, elapsed, peak_mb = _measure_peak_ram(
@@ -195,6 +212,11 @@ def main() -> None:
         help="Modelo de embeddings a usar (default: clip)",
     )
     args = parser.parse_args()
+
+    # CRÍTICO: setear el modelo activo ANTES de invocar a cualquier algoritmo
+    # para que get_predictions_dir() en _common.py devuelva la ruta correcta.
+    _set_active_model(args.model)
+    print(f">>> Modelo activo: '{args.model}' (resultados → predictions/{args.model}/)")
 
     if args.numalt == 9:
         _run_all_parallel(args.model)

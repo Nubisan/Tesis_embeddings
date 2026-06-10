@@ -2,7 +2,6 @@
 algorithms/pso.py
 =================
 PSO (Particle Swarm Optimization) con restricciones de cardinalidad.
-Migración Python del archivo PSO.R.
 
 Estructura del algoritmo:
   - Cada partícula es un vector de N reales en [0, 1].
@@ -11,13 +10,6 @@ Estructura del algoritmo:
     exacta sin ajustes post-hoc (a diferencia de BAT y ACO).
   - Función de costo: suma de distancias intra-cluster (coseno).
   - 40 partículas × 20 iteraciones.
-
-Implementación PSO:
-  - El R original usa el paquete `pso` (función `psoptim`) con SPSO 2007 default.
-  - En Python implementamos PSO global-best a mano, replicando los defaults de R:
-        w  = 1/(2·log 2)   ≈ 0.7213   (inercia)
-        c1 = 0.5 + log 2    ≈ 1.1931   (cognitive)
-        c2 = 0.5 + log 2    ≈ 1.1931   (social)
 """
 
 from __future__ import annotations
@@ -34,6 +26,7 @@ from scipy.spatial.distance import pdist, squareform
 
 from ._common import (
     compute_metrics,
+    get_predictions_dir,
     prepare_data,
     tabulate_clusters,
     to_int_list,
@@ -67,10 +60,8 @@ PSO_HYPERPARAMS: dict[str, Any] = {
     "runs":   {},
 }
 
-PROJECT_ROOT    = Path(__file__).resolve().parent.parent
-PREDICTIONS_DIR = PROJECT_ROOT / "predictions"
-PREDICTIONS_DIR.mkdir(parents=True, exist_ok=True)
-PRED_PSO_CSV    = PREDICTIONS_DIR / "pred_PSO.csv"
+# La ruta de salida se obtiene en runtime via get_predictions_dir()
+# de _common, que lee la env var CLUSTERING_MODEL seteada por testing.py.
 
 
 # ============================================================================
@@ -364,7 +355,8 @@ def run(odatasets_unique: pd.DataFrame) -> None:
 
     if results:
         df_out = pd.DataFrame(results)
-        df_out.to_csv(PRED_PSO_CSV, index=False)
-        print(f"\nPSO finalizado. Archivo guardado en: {PRED_PSO_CSV}")
+        out_path = get_predictions_dir() / "pred_PSO.csv"
+        df_out.to_csv(out_path, index=False)
+        print(f"\nPSO finalizado. Archivo guardado en: {out_path}")
     else:
         print("\nPSO finalizado sin resultados válidos. No se generó CSV.")

@@ -2,18 +2,11 @@
 algorithms/csclp.py
 ===================
 CSCLP (Constrained-Size Clustering via Linear Programming).
-Migración Python del archivo CSCLP.R.
 
 Algoritmo en dos etapas:
   1. PAM (k-medoids) para encontrar k medoids representativos
   2. Programación Lineal Entera (ILP) para asignar los no-medoids al medoid
      más cercano respetando las restricciones de cardinalidad
-
-Diferencias con R:
-  - PAM implementado a mano siguiendo Kaufman & Rousseeuw (1990): determinístico,
-    sin dependencias adicionales (compartido con kmedoids vía _common).
-  - ILP resuelto con scipy.optimize.milp (HiGHS solver) en lugar de lpSolve.
-  - Matrices A construidas con scipy.sparse para eficiencia.
 """
 
 from __future__ import annotations
@@ -34,6 +27,7 @@ from scipy.spatial.distance import pdist, squareform
 
 from ._common import (
     compute_metrics,
+    get_predictions_dir,
     pam_kaufman_rousseeuw,
     prepare_data,
     tabulate_clusters,
@@ -60,10 +54,8 @@ CSCLP_HYPERPARAMS_GLOBAL: dict[str, Any] = {
 # Hiperparámetros guardados por dataset durante la ejecución
 CSCLP_RUNS: dict[str, dict[str, Any]] = {}
 
-PROJECT_ROOT    = Path(__file__).resolve().parent.parent
-PREDICTIONS_DIR = PROJECT_ROOT / "predictions"
-PREDICTIONS_DIR.mkdir(parents=True, exist_ok=True)
-PRED_CSCLP_CSV  = PREDICTIONS_DIR / "pred_CSCLP.csv"
+# La ruta de salida se obtiene en runtime via get_predictions_dir()
+# de _common, que lee la env var CLUSTERING_MODEL seteada por testing.py.
 
 
 # ============================================================================
@@ -311,7 +303,8 @@ def run(odatasets_unique: pd.DataFrame) -> None:
 
     if results:
         df_out = pd.DataFrame(results)
-        df_out.to_csv(PRED_CSCLP_CSV, index=False)
-        print(f"\nCSCLP finalizado. Archivo guardado en: {PRED_CSCLP_CSV}")
+        out_path = get_predictions_dir() / "pred_CSCLP.csv"
+        df_out.to_csv(out_path, index=False)
+        print(f"\nCSCLP finalizado. Archivo guardado en: {out_path}")
     else:
         print("\nCSCLP finalizado sin resultados válidos.")

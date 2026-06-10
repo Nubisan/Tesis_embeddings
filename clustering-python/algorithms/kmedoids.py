@@ -2,17 +2,12 @@
 algorithms/kmedoids.py
 ======================
 K-MedoidsSC: K-Medoids con Restricciones de Tamaño (Size-Constrained).
-Migración Python del archivo Kmedoids.R.
 
 Algoritmo en dos etapas:
   1. PAM (k-medoids) para encontrar k medoids representativos
   2. Asignación greedy ordenada: cada punto se ordena por su distancia al
      medoid más cercano y se asignan los target[i] más cercanos al cluster i,
      en orden 1..k. Garantiza la cardinalidad exacta sin necesidad de ILP.
-
-Diferencias con R:
-  - PAM implementado a mano (compartido con CSCLP vía _common.py)
-  - Operaciones vectorizadas con NumPy en lugar de bucles R
 """
 
 from __future__ import annotations
@@ -28,6 +23,7 @@ from scipy.spatial.distance import pdist, squareform
 
 from ._common import (
     compute_metrics,
+    get_predictions_dir,
     pam_kaufman_rousseeuw,
     prepare_data,
     tabulate_clusters,
@@ -53,10 +49,8 @@ KMEDOIDS_HYPERPARAMS_GLOBAL: dict[str, Any] = {
 # Hiperparámetros guardados por dataset durante la ejecución
 KMEDOIDS_RUNS: dict[str, dict[str, Any]] = {}
 
-PROJECT_ROOT      = Path(__file__).resolve().parent.parent
-PREDICTIONS_DIR   = PROJECT_ROOT / "predictions"
-PREDICTIONS_DIR.mkdir(parents=True, exist_ok=True)
-PRED_KMEDOIDS_CSV = PREDICTIONS_DIR / "pred_KMEDOIDS.csv"
+# La ruta de salida se obtiene en runtime via get_predictions_dir()
+# de _common, que lee la env var CLUSTERING_MODEL seteada por testing.py.
 
 
 # ============================================================================
@@ -227,9 +221,10 @@ def run(odatasets_unique: pd.DataFrame) -> None:
 
     if results:
         df_out = pd.DataFrame(results)
-        df_out.to_csv(PRED_KMEDOIDS_CSV, index=False)
+        out_path = get_predictions_dir() / "pred_KMEDOIDS.csv"
+        df_out.to_csv(out_path, index=False)
         print(
-            f"\nK-Medoids finalizado. Archivo guardado en: {PRED_KMEDOIDS_CSV}"
+            f"\nK-Medoids finalizado. Archivo guardado en: {out_path}"
         )
     else:
         print("\nK-Medoids finalizado sin resultados válidos.")

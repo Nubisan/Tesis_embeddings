@@ -3,7 +3,6 @@ algorithms/km_milp.py
 =====================
 KM-MILP: K-Means con asignación vía Programación Lineal Entera (MILP)
 con restricción de tamaño máximo por cluster.
-Migración Python del archivo KM-MILP.R.
 
 Estructura del algoritmo:
   1. Inicialización: k centroides random (sample sin reemplazo de los puntos).
@@ -17,11 +16,6 @@ Estructura del algoritmo:
 Diferencias con CSCLP:
   - CSCLP usa cardinalidad EXACTA (=); KM-MILP usa COTA SUPERIOR (<=).
   - CSCLP usa PAM con medoids fijos; KM-MILP itera centroides como kmeans.
-
-Diferencias con R:
-  - lpSolve → scipy.optimize.milp (HiGHS solver)
-  - proxy::dist → scipy.spatial.distance.cdist (BLAS)
-  - Matrices A en sparse (escalable a embeddings)
 """
 
 from __future__ import annotations
@@ -42,6 +36,7 @@ from scipy.spatial.distance import cdist, pdist, squareform
 
 from ._common import (
     compute_metrics,
+    get_predictions_dir,
     prepare_data,
     tabulate_clusters,
     to_int_list,
@@ -74,10 +69,8 @@ KM_MILP_HYPERPARAMS: dict[str, Any] = {
     "runs":   {},
 }
 
-PROJECT_ROOT     = Path(__file__).resolve().parent.parent
-PREDICTIONS_DIR  = PROJECT_ROOT / "predictions"
-PREDICTIONS_DIR.mkdir(parents=True, exist_ok=True)
-PRED_KM_MILP_CSV = PREDICTIONS_DIR / "pred_KM-MILP.csv"
+# La ruta de salida se obtiene en runtime via get_predictions_dir()
+# de _common, que lee la env var CLUSTERING_MODEL seteada por testing.py.
 
 
 # ============================================================================
@@ -378,7 +371,8 @@ def run(odatasets_unique: pd.DataFrame) -> None:
 
     if results:
         df_out = pd.DataFrame(results)
-        df_out.to_csv(PRED_KM_MILP_CSV, index=False)
-        print(f"\nKM-MILP finalizado. Archivo guardado en: {PRED_KM_MILP_CSV}")
+        out_path = get_predictions_dir() / "pred_KM-MILP.csv"
+        df_out.to_csv(out_path, index=False)
+        print(f"\nKM-MILP finalizado. Archivo guardado en: {out_path}")
     else:
         print("\nKM-MILP finalizado sin resultados válidos. No se generó CSV.")

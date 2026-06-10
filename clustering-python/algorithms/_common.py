@@ -15,11 +15,14 @@ Funciones públicas:
   - calculate_centroids    : centroides por media con relleno de clusters vacíos
   - adjust_cardinality     : reasignación al centroide más cercano respetando target
   - evaluate_solution      : silhouette - penalty (función objetivo común)
+  - get_predictions_dir    : ruta donde guardar el CSV de resultados según el modelo activo
 """
 
 from __future__ import annotations
 
 import logging
+import os
+from pathlib import Path
 from typing import Any, Optional, cast
 
 import numpy as np
@@ -35,6 +38,32 @@ from sklearn.metrics import (  # pyright: ignore[reportUnknownVariableType]
 )
 
 logger = logging.getLogger(__name__)
+
+# Raíz del proyecto (dos niveles arriba de este archivo)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+# ----------------------------------------------------------------------------
+# Helper: directorio de predictions según el modelo activo
+# ----------------------------------------------------------------------------
+
+def get_predictions_dir() -> Path:
+    """
+    Devuelve el directorio donde el algoritmo debe guardar su CSV.
+
+    Lee la variable de entorno CLUSTERING_MODEL (seteada por testing.py).
+    - Si está definida (ej: "clip", "blip"): devuelve `predictions/<modelo>/`
+    - Si NO está definida: devuelve `predictions/` (retrocompatible)
+
+    El directorio se crea automáticamente si no existe.
+    """
+    model = os.environ.get("CLUSTERING_MODEL", "").strip().lower()
+    if model:
+        out_dir = PROJECT_ROOT / "predictions" / model
+    else:
+        out_dir = PROJECT_ROOT / "predictions"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    return out_dir
 
 
 # ----------------------------------------------------------------------------

@@ -2,7 +2,6 @@
 algorithms/sck1_final.py
 ========================
 SCK1 (Size-Constrained K-means con ILP exacto).
-Migración Python del archivo SCK1_final.R.
 
 Estructura del algoritmo:
   1. Inicialización: k centroides random (sample sin reemplazo de los puntos).
@@ -13,11 +12,6 @@ Estructura del algoritmo:
      - Objetivo: minimizar suma de distancias coseno punto↔centroide
   3. Decodifica la asignación (1-based).
   4. (Calcula nuevos centroides pero no los usa, igual que el R original.)
-
-Diferencias con R:
-  - lpSolve → scipy.optimize.milp (HiGHS solver)
-  - proxy::dist → scipy.spatial.distance.cdist (BLAS)
-  - Matrices A en sparse (escalable a embeddings)
 
 Diferencias con CSCLP:
   - CSCLP optimiza solo sobre los m no-medoids (los medoids quedan fijos);
@@ -43,6 +37,7 @@ from scipy.spatial.distance import cdist, pdist, squareform
 
 from ._common import (
     compute_metrics,
+    get_predictions_dir,
     prepare_data,
     tabulate_clusters,
     to_int_list,
@@ -74,10 +69,8 @@ SCK1_HYPERPARAMS: dict[str, Any] = {
     "runs":   {},
 }
 
-PROJECT_ROOT     = Path(__file__).resolve().parent.parent
-PREDICTIONS_DIR  = PROJECT_ROOT / "predictions"
-PREDICTIONS_DIR.mkdir(parents=True, exist_ok=True)
-PRED_SCK1_CSV    = PREDICTIONS_DIR / "pred_SCK1.csv"
+# La ruta de salida se obtiene en runtime via get_predictions_dir()
+# de _common, que lee la env var CLUSTERING_MODEL seteada por testing.py.
 
 
 # ============================================================================
@@ -354,7 +347,8 @@ def run(odatasets_unique: pd.DataFrame) -> None:
 
     if results:
         df_out = pd.DataFrame(results)
-        df_out.to_csv(PRED_SCK1_CSV, index=False)
-        print(f"\nSCK1 finalizado. Archivo guardado en: {PRED_SCK1_CSV}")
+        out_path = get_predictions_dir() / "pred_SCK1.csv"
+        df_out.to_csv(out_path, index=False)
+        print(f"\nSCK1 finalizado. Archivo guardado en: {out_path}")
     else:
         print("\nSCK1 finalizado sin resultados válidos. No se generó CSV.")
