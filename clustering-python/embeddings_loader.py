@@ -1,33 +1,45 @@
 """
 embeddings_loader.py
 ====================
-Carga embeddings desde archivos .npz y construye un DataFrame
+Carga embeddings desde archivos .npz y construye el DataFrame
 `odatasets_unique` compatible con la pipeline existente (los 8 algoritmos
-y el testing.py).
+y testing.py). Reemplaza a Openml.R / openml_loader.
 
-Estructura esperada de archivos en disco:
+Estructura esperada en disco (NUEVA: con sub-carpeta de modalidad):
     embeddings/
-        clip/
-            bbc_sport.npz
-            ag_news.npz
-            ...
-        blip/
-            ...
-        qwen_vl/
-            ...
-        internvl/
-            ...
+        <modelo>/                      modelo in {clip, blip, qwen_vl, internvl}
+            imagen/
+                orl.npz
+                mnist.npz
+                ...
+            texto/
+                bbc_sport.npz
+                ...
+    (retrocompatible: si no existe la sub-carpeta de modalidad, lee los .npz
+     directamente de embeddings/<modelo>/ como en la version anterior.)
 
 Cada .npz contiene:
-    X            : matriz de embeddings (N, D), float32, idealmente L2-normalizada
-    y            : labels enteros (N,)
-    class_names  : array de strings con los nombres originales de las clases
-    metadata     : dict serializado con info (n, n_classes, source, fecha, etc.)
-"""
+    X            : (N, D) float32, idealmente L2-normalizado
+    y            : (N,) labels enteros
+    class_names  : (k,) nombres de clase
+    grupo        : 'A' | 'B'   (opcional)
+    k            : int         (opcional)
+    modalidad    : 'imagen' | 'texto'  (opcional)
+    modelo       : str         (opcional)
 
+Funcion publica principal (firma compatible con testing.py):
+    load_all_datasets(model, modalidad='imagen', grupo=None) -> pd.DataFrame
+        Devuelve `odatasets_unique` con columnas:
+          - name                       (str)
+          - NumberOfClasses            (int)
+          - NumberOfInstances          (int)
+          - class_distribution_vector  (list[int]  -> es el target_cardinality)
+          - dataset                    (pd.DataFrame: D columnas float + columna 'class')
+"""
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any, Optional
 
@@ -38,18 +50,25 @@ logger = logging.getLogger(__name__)
 if not logger.handlers:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-PROJECT_ROOT          = Path(__file__).resolve().parent
-DEFAULT_EMBEDDINGS_DIR = PROJECT_ROOT / "embeddings"
+PROJECT_ROOT = Path(__file__).resolve().parent
+DEFAULT_EMBEDDINGS_DIR = Path(os.environ.get("EMB_ROOT", str(PROJECT_ROOT / "embeddings")))
 
 VALID_MODELS = {"clip", "blip", "qwen_vl", "internvl"}
+VALID_MODALIDADES = {"imagen", "texto"}
 
 
 # ============================================================================
-# Carga de un único .npz
+# Carga de un unico .npz -> dict con metadatos + DataFrame interno
 # ============================================================================
 
 def _load_single_npz(npz_path: Path) -> Optional[dict[str, Any]]:
-    """Carga un .npz y devuelve dict con X, y, n, n_classes, distribution."""
+    """
+    Carga un .npz y devuelve un dict con:
+        name, NumberOfClasses, NumberOfInstances,
+        class_distribution_vector (list[int]), dataset (DataFrame D float + 'class'),
+        grupo.
+    Devuelve None si el archivo es invalido (se omite, no rompe la corrida).
+    """
     try:
         npz = np.load(npz_path, allow_pickle=True)
     except (OSError, ValueError) as e:
@@ -57,164 +76,142 @@ def _load_single_npz(npz_path: Path) -> Optional[dict[str, Any]]:
         return None
 
     if "X" not in npz or "y" not in npz:
-        logger.warning("Archivo %s no tiene claves X/y. Skipping.", npz_path.name)
+        logger.warning("Archivo %s sin claves X/y. Omitido.", npz_path.name)
         return None
 
-    x_emb: np.ndarray = np.asarray(npz["X"], dtype=np.float32)
-    y_arr: np.ndarray = np.asarray(npz["y"]).astype(int)
+    x_emb = np.asarray(npz["X"], dtype=np.float32)
+    y_raw = np.asarray(npz["y"]).astype(int)
 
-    if x_emb.shape[0] != y_arr.shape[0]:
+    if x_emb.ndim != 2 or x_emb.shape[0] != y_raw.shape[0] or x_emb.shape[0] == 0:
         logger.warning(
-            "Inconsistencia en %s: X tiene %d filas, y tiene %d. Skipping.",
-            npz_path.name, x_emb.shape[0], y_arr.shape[0],
+            "Inconsistencia en %s: X=%s, y=%s. Omitido.",
+            npz_path.name, getattr(x_emb, "shape", None), getattr(y_raw, "shape", None),
         )
         return None
 
-    class_names_raw = npz.get("class_names", None)
-    if class_names_raw is None:
-        class_names: list[str] = [str(c) for c in sorted(np.unique(y_arr).tolist())]
-    else:
-        class_names = [str(c) for c in np.asarray(class_names_raw).tolist()]
+    # Remapear etiquetas a 0..k-1 CONSECUTIVAS (evita el bug 'index out of bounds'
+    # cuando un dataset trae labels originales no consecutivos tras la limpieza).
+    _, y = np.unique(y_raw, return_inverse=True)
+    y = y.astype(int)
 
-    unique_classes, counts = np.unique(y_arr, return_counts=True)
-    class_distribution_vector = counts.tolist()
+    n, _d = x_emb.shape
+    k = int(y.max()) + 1
+    counts = np.bincount(y, minlength=k).astype(int)  # conteo por clase (= target_cardinality)
+
+    # DataFrame interno: D columnas float + columna 'class' (lo que espera prepare_data)
+    inner = pd.DataFrame(x_emb)                       # columnas 0..D-1, dtype float32
+    inner.columns = [str(c) for c in inner.columns]   # nombres de columna como str
+    inner["class"] = y                                # columna target
+
+    grupo = str(npz["grupo"]) if "grupo" in npz else ""
 
     return {
-        "dataset_name":              npz_path.stem,
-        "X":                         x_emb,
-        "y":                         y_arr,
-        "class_names":               class_names,
-        "n":                         int(x_emb.shape[0]),
-        "n_classes":                 int(len(unique_classes)),
-        "class_distribution_vector": class_distribution_vector,
+        "name": npz_path.stem,
+        "NumberOfClasses": int(k),
+        "NumberOfInstances": int(n),
+        "class_distribution_vector": [int(c) for c in counts],
+        "dataset": inner,
+        "grupo": grupo,
     }
 
 
 # ============================================================================
-# Construcción de DataFrame por dataset (Opción A: features + columna class)
+# Resolucion de carpeta (con modalidad y retrocompatibilidad)
 # ============================================================================
 
-def _build_dataset_df(x_emb: np.ndarray, y_arr: np.ndarray) -> pd.DataFrame:
-    """DataFrame con D columnas de embedding + columna 'class' (string)."""
-    d = int(x_emb.shape[1])
-    feature_cols = [f"e{i}" for i in range(d)]
-    df = pd.DataFrame(x_emb, columns=feature_cols)
-    df["class"] = pd.Series(y_arr).astype(str)
-    return df
+def _resolver_dir(model: str, modalidad: str, embeddings_dir: Path) -> Path:
+    """
+    Devuelve embeddings/<model>/<modalidad>/ si existe; si no, cae a
+    embeddings/<model>/ (estructura plana antigua).
+    """
+    base = embeddings_dir / model
+    con_modalidad = base / modalidad
+    if con_modalidad.is_dir():
+        return con_modalidad
+    return base
 
 
 # ============================================================================
-# Loader principal
+# Punto de entrada principal (firma usada por testing.py)
 # ============================================================================
 
 def load_all_datasets(
     model: str = "clip",
-    embeddings_dir: Optional[Path] = None,
+    modalidad: str = "imagen",
+    grupo: Optional[str] = None,
+    embeddings_dir: Optional[Path | str] = None,
 ) -> pd.DataFrame:
-    """Carga todos los embeddings disponibles para un modelo dado."""
+    """
+    Construye `odatasets_unique` (DataFrame) leyendo todos los .npz de
+    embeddings/<model>/<modalidad>/.
+
+    Parameters
+    ----------
+    model       : 'clip' | 'blip' | 'qwen_vl' | 'internvl'
+    modalidad   : 'imagen' | 'texto'      (NUEVO; antes solo existia imagen)
+    grupo       : 'A' | 'B' | None        (None = ambos grupos)
+    embeddings_dir : raiz de embeddings (default: ./embeddings o $EMB_ROOT)
+
+    Returns
+    -------
+    pd.DataFrame con columnas:
+        name, NumberOfClasses, NumberOfInstances, class_distribution_vector, dataset
+    (mismo formato que el loader original; los algoritmos no cambian.)
+    """
     if model not in VALID_MODELS:
-        raise ValueError(
-            f"Modelo '{model}' no válido. Opciones: {sorted(VALID_MODELS)}"
-        )
+        raise ValueError(f"model debe ser uno de {sorted(VALID_MODELS)}, recibido: {model!r}")
+    if modalidad not in VALID_MODALIDADES:
+        raise ValueError(f"modalidad debe ser una de {sorted(VALID_MODALIDADES)}, recibido: {modalidad!r}")
 
-    base_dir = (embeddings_dir or DEFAULT_EMBEDDINGS_DIR) / model
-    if not base_dir.exists():
+    emb_dir = Path(embeddings_dir) if embeddings_dir is not None else DEFAULT_EMBEDDINGS_DIR
+    carpeta = _resolver_dir(model, modalidad, emb_dir)
+
+    if not carpeta.is_dir():
         raise FileNotFoundError(
-            f"Directorio de embeddings no encontrado: {base_dir}\n"
-            f"Asegúrate de haber descargado los .npz al directorio correcto."
+            f"No existe la carpeta {carpeta}. ¿Descomprimiste emb_{model}.zip "
+            f"bajo embeddings/{model}/{modalidad}/?"
         )
 
-    npz_files = sorted(base_dir.glob("*.npz"))
-    if not npz_files:
-        raise FileNotFoundError(
-            f"No se encontraron archivos .npz en {base_dir}."
-        )
-
-    rows: list[dict[str, Any]] = []
-    for npz_path in npz_files:
+    filas: list[dict[str, Any]] = []
+    for npz_path in sorted(carpeta.glob("*.npz")):
         info = _load_single_npz(npz_path)
         if info is None:
             continue
+        if grupo is not None and info["grupo"] != str(grupo):
+            continue
+        filas.append(info)
 
-        dataset_df = _build_dataset_df(info["X"], info["y"])
-
-        rows.append({
-            "name":                      info["dataset_name"],
-            "NumberOfClasses":           info["n_classes"],
-            "NumberOfInstances":         info["n"],
-            "class_distribution_vector": info["class_distribution_vector"],
-            "dataset":                   dataset_df,
-        })
-
-        logger.info(
-            "[%s] %s: N=%d, D=%d, K=%d",
-            model, info["dataset_name"],
-            info["n"], info["X"].shape[1], info["n_classes"],
+    if not filas:
+        raise FileNotFoundError(
+            f"No se cargo ningun .npz valido en {carpeta} "
+            f"(modelo={model}, modalidad={modalidad}, grupo={grupo})."
         )
 
-    if not rows:
-        raise RuntimeError(
-            f"Ningún archivo .npz en {base_dir} se pudo cargar correctamente."
-        )
+    # Mismas 5 columnas y orden que el loader original (los algoritmos las usan por nombre)
+    odatasets_unique = pd.DataFrame(
+        [
+            {
+                "name": f["name"],
+                "NumberOfClasses": f["NumberOfClasses"],
+                "NumberOfInstances": f["NumberOfInstances"],
+                "class_distribution_vector": f["class_distribution_vector"],
+                "dataset": f["dataset"],
+            }
+            for f in filas
+        ]
+    )
 
-    odatasets_unique = pd.DataFrame(rows)
     logger.info(
-        "✓ Cargados %d datasets con modelo '%s' desde %s",
-        len(odatasets_unique), model, base_dir,
+        "Cargados %d datasets de %s (modelo=%s, modalidad=%s%s).",
+        len(odatasets_unique), carpeta, model, modalidad,
+        f", grupo={grupo}" if grupo else "",
     )
     return odatasets_unique
 
 
-# ============================================================================
-# Carga selectiva
-# ============================================================================
-
-def load_one_dataset(
-    dataset_name: str,
-    model: str = "clip",
-    embeddings_dir: Optional[Path] = None,
-) -> pd.DataFrame:
-    """Carga un único dataset por nombre."""
-    if model not in VALID_MODELS:
-        raise ValueError(
-            f"Modelo '{model}' no válido. Opciones: {sorted(VALID_MODELS)}"
-        )
-
-    base_dir = (embeddings_dir or DEFAULT_EMBEDDINGS_DIR) / model
-    npz_path = base_dir / f"{dataset_name}.npz"
-
-    if not npz_path.exists():
-        raise FileNotFoundError(f"No existe {npz_path}")
-
-    info = _load_single_npz(npz_path)
-    if info is None:
-        raise RuntimeError(f"No se pudo cargar {npz_path}")
-
-    dataset_df = _build_dataset_df(info["X"], info["y"])
-    return pd.DataFrame([{
-        "name":                      info["dataset_name"],
-        "NumberOfClasses":           info["n_classes"],
-        "NumberOfInstances":         info["n"],
-        "class_distribution_vector": info["class_distribution_vector"],
-        "dataset":                   dataset_df,
-    }])
-
-
-# ============================================================================
-# CLI para inspección rápida
-# ============================================================================
-
 if __name__ == "__main__":
     import sys
-
-    model_arg = sys.argv[1] if len(sys.argv) > 1 else "clip"
-    print(f"\nCargando embeddings con modelo '{model_arg}'...")
-
-    try:
-        df = load_all_datasets(model=model_arg)
-        print("\n=== Resumen ===")
-        print(df[["name", "NumberOfClasses", "NumberOfInstances",
-                  "class_distribution_vector"]].to_string(index=False))
-    except (FileNotFoundError, ValueError, RuntimeError) as exc:
-        print(f"Error: {exc}")
-        sys.exit(1)
+    m = sys.argv[1] if len(sys.argv) > 1 else "clip"
+    mod = sys.argv[2] if len(sys.argv) > 2 else "imagen"
+    df = load_all_datasets(m, mod)
+    print(df[["name", "NumberOfClasses", "NumberOfInstances"]].to_string(index=False))

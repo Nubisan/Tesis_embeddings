@@ -32,4 +32,4 @@ data/
 # =========================
 .DS_Store
 Thumbs.db
-clustering-python/embeddings/
+clustering-python/runner_state/tmp_emb

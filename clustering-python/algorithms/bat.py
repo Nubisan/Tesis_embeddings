@@ -1,5 +1,5 @@
 """
-algorithms/bat.py
+K-MeansBA
 =================
 Algoritmo de clustering BAT (metaheurístico inspirado en murciélagos).
 
@@ -15,7 +15,6 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Optional
 
 import numpy as np
@@ -66,11 +65,6 @@ class BatHyperparams:
 
 @dataclass
 class _BatState:
-    """
-    Estado mutable de un murciélago. Usamos dataclass (no TypedDict) porque
-    Pylance propaga mejor los tipos a través de acceso por atributo que por
-    clave de TypedDict.
-    """
     position:   np.ndarray
     velocity:   np.ndarray
     frequency:  float
@@ -83,9 +77,6 @@ BAT_HYPERPARAMS: dict[str, Any] = {
     "global": BatHyperparams(),
     "runs":   {},
 }
-
-# La ruta de salida se obtiene en runtime via get_predictions_dir()
-# de _common, que lee la env var CLUSTERING_MODEL seteada por testing.py.
 
 
 # ============================================================================
@@ -113,6 +104,47 @@ def generate_initial_solution(
 
     centroids = calculate_centroids(x_mat, labels, k)
     return adjust_cardinality(labels, x_mat, centroids, target_cardinality)
+
+
+# ============================================================================
+# Reparación final determinista de cardinalidad
+# ============================================================================
+
+def repair_cardinality_deterministic(
+    cluster_assignment: np.ndarray,
+    x_mat: np.ndarray,
+    target_cardinality: np.ndarray,
+) -> np.ndarray:
+
+    k = len(target_cardinality)
+    cluster_sizes = tabulate_clusters(cluster_assignment, k)
+
+    if not np.any(cluster_sizes > target_cardinality):
+        return cluster_assignment
+
+    cluster_assignment = cluster_assignment.copy().astype(int)
+    x_mat     = np.asarray(x_mat, dtype=float)
+    centroids = calculate_centroids(x_mat, cluster_assignment, k)
+
+    for j in range(1, k + 1):
+        while cluster_sizes[j - 1] > target_cardinality[j - 1]:
+            idx = np.where(cluster_assignment == j)[0]
+            if len(idx) == 0:
+                break
+            available      = np.where(cluster_sizes < target_cardinality)[0]
+            valid_clusters = available[available != (j - 1)]
+            if len(valid_clusters) == 0:
+                break
+
+            element = int(idx[0])  # orden determinista, sin rng.choice
+            dists   = np.sum((centroids[valid_clusters] - x_mat[element]) ** 2, axis=1)
+            chosen  = int(valid_clusters[np.argmin(dists)]) + 1
+
+            cluster_assignment[element] = chosen
+            cluster_sizes[j - 1]     -= 1
+            cluster_sizes[chosen - 1] += 1
+
+    return cluster_assignment
 
 
 # ============================================================================
@@ -181,14 +213,22 @@ def run_bat_algorithm(
             if rng.random() > bat.pulse_rate:
                 new_position = np.asarray(rng.integers(1, k + 1, size=n), dtype=int)
 
-            # Ajustar excesos por cardinalidad (lógica equivalente al while de R)
+            cluster_sizes = tabulate_clusters(new_position, k)
             for j in range(1, k + 1):
-                while int(np.sum(new_position == j)) > int(target_cardinality[j - 1]):
+                while cluster_sizes[j - 1] > target_cardinality[j - 1]:
                     idx = np.where(new_position == j)[0]
-                    if len(idx) > 0:
-                        new_position[int(rng.choice(idx))] = int(rng.integers(1, k + 1))
-                    else:
+                    if len(idx) == 0:
                         break
+                    available      = np.where(cluster_sizes < target_cardinality)[0]
+                    valid_clusters = available[available != (j - 1)]
+                    if len(valid_clusters) == 0:
+                        break
+
+                    element = int(rng.choice(idx))
+                    chosen  = int(rng.choice(valid_clusters)) + 1
+                    new_position[element]     = chosen
+                    cluster_sizes[j - 1]     -= 1
+                    cluster_sizes[chosen - 1] += 1
 
             new_score = evaluate_solution(
                 new_position, d_cosine_sq, target_cardinality, penalty_weight
@@ -208,6 +248,10 @@ def run_bat_algorithm(
                 best_solution = new_position.copy()
                 best_score    = new_score
                 best_seed     = bats[i].seed
+
+    best_solution = repair_cardinality_deterministic(
+        best_solution, x_mat, target_cardinality
+    )
 
     return {
         "best_solution": best_solution,

@@ -1,0 +1,56 @@
+modelo,modalidad,grupo,dataset,k_obj,k_real,N,dim,device,t_datos_s,t_embed_s,seg_por_item,items_por_s,ram_base_MB,ram_pico_MB,ram_delta_MB,vram_pico_MB,dtype,batch,n_hilos,estado,error,fecha
+clip,imagen,A,orl,40,40,400,512,cuda,4.3,0.849,0.00212,471.08,1464.1,2054.6,590.5,1334.2,float32,256,8,ok,,2026-07-04 13:48:47
+clip,imagen,A,retinamnist,5,,,,cuda,,,,,,,,,float32,256,8,error,No module named 'medmnist',2026-07-04 13:48:52
+clip,imagen,A,digits,10,10,1797,512,cuda,0.057,2.981,0.00166,602.81,1904.4,2060.6,156.2,1372.2,float32,256,8,ok,,2026-07-04 13:48:52
+clip,imagen,A,lfw,34,34,2370,512,cuda,47.894,3.838,0.00162,617.58,1741.6,2130.3,388.7,1372.2,float32,256,8,ok,,2026-07-04 13:48:55
+clip,imagen,A,bloodmnist,8,,,,cuda,,,,,,,,,float32,256,8,error,No module named 'medmnist',2026-07-04 13:49:47
+clip,imagen,A,pathmnist,9,,,,cuda,,,,,,,,,float32,256,8,error,No module named 'medmnist',2026-07-04 13:49:47
+clip,imagen,A,organcmnist,11,,,,cuda,,,,,,,,,float32,256,8,error,No module named 'medmnist',2026-07-04 13:49:47
+clip,imagen,A,usps,10,,,,cuda,,,,,,,,,float32,256,8,error,<urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1006)>,2026-07-04 13:49:47
+clip,imagen,B,semeion,10,10,1593,512,cuda,3.254,2.68,0.00168,594.51,1856.9,2129.6,272.8,1372.2,float32,256,8,ok,,2026-07-04 13:49:48
+clip,imagen,B,dermamnist,7,,,,cuda,,,,,,,,,float32,256,8,error,No module named 'medmnist',2026-07-04 13:49:54
+clip,imagen,B,stl10,10,10,5000,512,cuda,237.289,8.215,0.00164,608.64,1979.7,2292.6,312.9,1372.2,float32,256,8,ok,,2026-07-04 13:49:54
+clip,imagen,B,oxfordpet,37,37,7349,512,cuda,103.477,22.697,0.00309,323.79,6902.2,7654.2,752.0,1372.2,float32,256,8,ok,,2026-07-04 13:54:00
+clip,imagen,B,organsmnist,11,,,,cuda,,,,,,,,,float32,256,8,error,No module named 'medmnist',2026-07-04 13:56:06
+clip,imagen,B,mnist,10,10,10000,512,cuda,5.974,15.73,0.00157,635.74,2384.0,2384.0,0.0,1372.2,float32,256,8,ok,,2026-07-04 13:56:06
+clip,imagen,B,fashionmnist,10,10,10000,512,cuda,12.142,15.381,0.00154,650.17,1870.2,2204.5,334.3,1372.2,float32,256,8,ok,,2026-07-04 13:56:28
+clip,imagen,A,retinamnist,5,5,1600,512,cuda,9.137,2.859,0.00179,559.69,1461.8,2050.2,588.4,1372.2,float32,256,8,ok,,2026-07-04 13:59:40
+clip,imagen,A,bloodmnist,8,8,3421,512,cuda,71.613,5.267,0.00154,649.48,1815.3,2100.6,285.3,1372.2,float32,256,8,ok,,2026-07-04 13:59:52
+clip,imagen,A,pathmnist,9,9,7180,512,cuda,60.45,11.175,0.00156,642.52,1892.0,2129.5,237.5,1372.2,float32,256,8,ok,,2026-07-04 14:01:09
+clip,imagen,A,organcmnist,11,11,8216,512,cuda,3.583,12.627,0.00154,650.69,1812.2,2180.3,368.2,1372.2,float32,256,8,ok,,2026-07-04 14:02:21
+clip,imagen,A,usps,10,,,,cuda,,,,,,,,,float32,256,8,error,<urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1006)>,2026-07-04 14:02:37
+clip,imagen,B,dermamnist,7,7,2005,512,cuda,3.733,3.124,0.00156,641.89,1799.2,2114.0,314.8,1372.2,float32,256,8,ok,,2026-07-04 14:02:38
+clip,imagen,B,organsmnist,11,11,8827,512,cuda,40.546,13.614,0.00154,648.36,1740.6,2143.9,403.3,1372.2,float32,256,8,ok,,2026-07-04 14:02:45
+clip,imagen,B,cifar10,10,10,10000,512,cuda,7262.913,16.649,0.00166,600.62,1831.1,2219.2,388.1,1372.2,float32,256,8,ok,,2026-07-04 14:03:40
+clip,imagen,B,cifar100,20,20,10000,512,cuda,7334.562,15.88,0.00159,629.71,1847.2,2182.1,334.9,1372.2,float32,256,8,ok,,2026-07-04 16:04:59
+clip,texto,A,ag_news,4,,,,cuda,,,,,,,,,float32,256,8,error,No module named 'datasets',2026-07-04 18:07:30
+clip,texto,A,sst5,5,,,,cuda,,,,,,,,,float32,256,8,error,No module named 'datasets',2026-07-04 18:07:30
+clip,texto,A,liar,6,,,,cuda,,,,,,,,,float32,256,8,error,No module named 'datasets',2026-07-04 18:07:30
+clip,texto,A,meld_e,7,,,,cuda,,,,,,,,,float32,256,8,error,No module named 'datasets',2026-07-04 18:07:30
+clip,texto,A,yahoo,10,,,,cuda,,,,,,,,,float32,256,8,error,No module named 'datasets',2026-07-04 18:07:30
+clip,texto,A,dbpedia14,14,,,,cuda,,,,,,,,,float32,256,8,error,No module named 'datasets',2026-07-04 18:07:30
+clip,texto,A,goemotions,28,,,,cuda,,,,,,,,,float32,256,8,error,No module named 'datasets',2026-07-04 18:07:30
+clip,texto,B,bbc_news,5,,,,cuda,,,,,,,,,float32,256,8,error,No module named 'datasets',2026-07-04 18:07:30
+clip,texto,B,emotion,6,,,,cuda,,,,,,,,,float32,256,8,error,No module named 'datasets',2026-07-04 18:07:30
+clip,texto,B,trec,6,,,,cuda,,,,,,,,,float32,256,8,error,No module named 'datasets',2026-07-04 18:07:30
+clip,texto,B,patent,9,,,,cuda,,,,,,,,,float32,256,8,error,No module named 'datasets',2026-07-04 18:07:30
+clip,texto,B,reuters_r10,10,,,,cuda,,,,,,,,,float32,256,8,error,No module named 'nltk',2026-07-04 18:07:30
+clip,texto,B,scotus,13,,,,cuda,,,,,,,,,float32,256,8,error,No module named 'datasets',2026-07-04 18:07:30
+clip,texto,B,tweeteval_emoji,20,,,,cuda,,,,,,,,,float32,256,8,error,No module named 'datasets',2026-07-04 18:07:30
+clip,texto,B,20ng,20,20,7278,512,cuda,46.263,8.004,0.0011,909.29,1836.3,1962.4,126.1,1242.3,float32,256,8,ok,,2026-07-04 18:07:30
+clip,imagen,A,usps,10,,,,cuda,,,,,,,,,float32,256,8,error,<urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1006)>,2026-07-04 18:28:27
+clip,imagen,A,usps,10,10,9298,512,cuda,12.189,15.451,0.00166,601.75,1483.5,2087.0,603.5,1372.2,float32,256,8,ok,,2026-07-04 18:32:14
+clip,texto,A,ag_news,4,4,7600,512,cuda,6.416,8.172,0.00108,930.06,907.7,1269.7,362.0,1242.0,float32,256,8,ok,,2026-07-04 18:59:04
+clip,texto,A,sst5,5,5,8503,512,cuda,3.04,5.962,0.0007,1426.12,1230.6,1233.4,2.8,1234.0,float32,256,8,ok,,2026-07-04 18:59:19
+clip,texto,A,liar,6,6,9990,512,cuda,5.717,8.154,0.00082,1225.17,1292.9,1302.2,9.3,1242.0,float32,256,8,ok,,2026-07-04 18:59:28
+clip,texto,A,meld_e,7,7,9958,512,cuda,7.112,6.855,0.00069,1452.59,1332.4,1337.9,5.6,1237.0,float32,256,8,ok,,2026-07-04 18:59:42
+clip,texto,A,yahoo,10,10,10000,512,cuda,22.481,11.145,0.00111,897.3,1434.6,1436.2,1.6,1242.0,float32,256,8,ok,,2026-07-04 18:59:57
+clip,texto,A,dbpedia14,14,14,9994,512,cuda,10.461,10.467,0.00105,954.84,1443.6,1452.0,8.4,1242.0,float32,256,8,ok,,2026-07-04 19:00:30
+clip,texto,A,goemotions,28,28,4543,512,cuda,6.805,2.41,0.00053,1884.94,1436.3,1436.5,0.2,1223.5,float32,256,8,ok,,2026-07-04 19:00:52
+clip,texto,B,bbc_news,5,5,2124,512,cuda,2.774,4.323,0.00204,491.37,1403.0,1403.4,0.3,1240.5,float32,256,8,ok,,2026-07-04 19:01:01
+clip,texto,B,emotion,6,6,2000,512,cuda,6.689,1.387,0.00069,1441.7,1386.8,1387.4,0.6,1117.9,float32,256,8,ok,,2026-07-04 19:01:08
+clip,texto,B,trec,6,6,5871,512,cuda,3.005,2.308,0.00039,2543.93,1387.2,1403.3,16.1,971.4,float32,256,8,ok,,2026-07-04 19:01:16
+clip,texto,B,patent,9,9,4987,512,cuda,7.613,6.127,0.00123,813.95,1418.1,1419.2,1.1,1242.0,float32,256,8,ok,,2026-07-04 19:01:22
+clip,texto,B,reuters_r10,10,10,7948,512,cuda,11.75,10.089,0.00127,787.79,1433.7,1445.9,12.2,1242.0,float32,256,8,ok,,2026-07-04 19:01:36
+clip,texto,B,scotus,13,13,1400,512,cuda,13.459,53.224,0.03802,26.3,1911.4,2249.7,338.3,1240.5,float32,256,8,ok,,2026-07-04 19:01:58
+clip,texto,B,tweeteval_emoji,20,20,4995,512,cuda,7.385,2.371,0.00047,2106.45,1822.0,1824.4,2.4,1139.2,float32,256,8,ok,,2026-07-04 19:03:04

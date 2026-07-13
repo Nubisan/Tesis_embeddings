@@ -21,6 +21,7 @@ Diferencias con CSCLP:
 from __future__ import annotations
 
 import logging
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -134,10 +135,17 @@ def _solve_milp_assignment(
     integrality: np.ndarray,
     bounds: Bounds,
     dist_method: str,
-) -> np.ndarray:
+    time_limit: Optional[float] = None,
+) -> tuple[np.ndarray, str]:
     """
     Resuelve el MILP de asignación dados los centroides actuales.
-    Devuelve un vector p (1-based) con la asignación cluster de cada punto.
+    Devuelve (p, status) con p = vector 1-based de asignación y status en
+    {"optimal", "time_limit"}.
+
+    Si `time_limit` (segundos) se pasa y el solver lo alcanza sin probar
+    optimalidad, HiGHS devuelve la MEJOR solución factible encontrada
+    (incumbente): se acepta y se marca status="time_limit". Solo se lanza
+    error si NO se encontró ninguna solución factible.
 
     Las matrices de restricciones se reciben pre-construidas para no
     rehacerlas en cada iteración del loop kmeans-style.
@@ -159,25 +167,31 @@ def _solve_milp_assignment(
     # Bug del stub: LinearConstraint acepta arrays para lb/ub.
     constraints = LinearConstraint(a_full, lb=lb_full, ub=ub_full)  # pyright: ignore[reportArgumentType]
 
+    options = {"time_limit": float(time_limit)} if time_limit else None
     res = milp(
         c           = cost_vec,
         constraints = constraints,
         integrality = integrality,
         bounds      = bounds,
+        options     = options,
     )
 
     # cast a Any porque OptimizeResult no tipa bien sus atributos dinámicos
     res_any = cast(Any, res)
-    if not res_any.success or res_any.x is None:
+    # status 0 = óptimo; status 1 = límite (tiempo/iter) alcanzado. En ambos,
+    # si hay solución factible (x no es None) la usamos.
+    if res_any.x is None:
         raise RuntimeError(
-            f"MILP failed: status={res_any.status}, message={res_any.message}"
+            f"MILP sin solución factible: status={res_any.status}, "
+            f"message={res_any.message}"
         )
+    status = "optimal" if res_any.success else "time_limit"
 
     # Reshape a (n, k): cada fila i son las k indicadoras del punto i
     sol = np.asarray(res_any.x, dtype=float).reshape(n, k)
     # max.col(sol, "first") en R == argmax por fila en Python (con ties.first)
     p = np.argmax(sol, axis=1) + 1  # 1-based como R
-    return p.astype(int)
+    return p.astype(int), status
 
 
 # ============================================================================
@@ -191,9 +205,14 @@ def clustering_with_size_constraints(
     seed:            int   = 123,
     dist_method:     str   = "cosine",
     convergence_tol: float = 1e-4,
+    time_limit:      Optional[float] = None,
 ) -> dict[str, Any]:
     """
     K-Means con asignación MILP. Itera hasta convergencia o max_iter.
+
+    `time_limit` (segundos, por resolución MILP) es opcional: si se alcanza sin
+    probar optimalidad, se usa la mejor solución factible (incumbente) y se
+    marca la corrida como aproximada.
 
     Devuelve dict con `p` (asignación 1-based) e `hyperparams`.
     """
@@ -220,14 +239,18 @@ def clustering_with_size_constraints(
 
     p: np.ndarray = np.ones(n, dtype=int)
     converged_iter = max_iter
+    any_time_limited = False
 
     for iter_num in range(1, max_iter + 1):
-        p_new = _solve_milp_assignment(
+        p_new, solve_status = _solve_milp_assignment(
             data, centroids, size_constraints,
             a_full, lb_full, ub_full,
             integrality, bounds,
             dist_method,
+            time_limit=time_limit,
         )
+        if solve_status == "time_limit":
+            any_time_limited = True
 
         # Actualización de centroides como media por cluster
         new_centroids = centroids.copy()
@@ -257,6 +280,8 @@ def clustering_with_size_constraints(
             "lp_solver":         "scipy.optimize.milp (HiGHS)",
             "all_bin":           True,
             "constraint_type":   "<= (upper bound)",
+            "time_limit_s":      float(time_limit) if time_limit else None,
+            "solution_type":     "incumbent" if any_time_limited else "optimal",
         },
     }
 
@@ -264,6 +289,31 @@ def clustering_with_size_constraints(
 # ============================================================================
 # Runner por dataset
 # ============================================================================
+
+def _registrar_incumbente(name: str, n: int, k: int,
+                          elapsed: float, time_limit: Optional[float]) -> None:
+    """
+    Deja constancia (sidecar CSV, no toca el esquema de pred_KM-MILP.csv) de que
+    un dataset se resolvió con la incumbente por límite de tiempo. Sirve para tu
+    nota de fidelidad: distingue resultados exactos de aproximados.
+    """
+    try:
+        out = get_predictions_dir() / "km_milp_incumbentes.csv"
+        row = pd.DataFrame([{
+            "timestamp":     pd.Timestamp.now().isoformat(),
+            "model":         os.environ.get("CLUSTERING_MODEL", ""),
+            "modalidad":     os.environ.get("CLUSTERING_MODALIDAD", ""),
+            "dataset":       name,
+            "n":             n,
+            "k":             k,
+            "elapsed_s":     round(elapsed, 1),
+            "time_limit_s":  time_limit,
+            "solution_type": "incumbent",
+        }])
+        row.to_csv(out, mode="a", header=not out.exists(), index=False)
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
+
 
 def run_clustering_row(
     dataset: pd.DataFrame,
@@ -290,8 +340,13 @@ def run_clustering_row(
 
     start_total = time.perf_counter()
 
+    # time_limit por resolución MILP: se toma de la env var KM_MILP_TIME_LIMIT
+    # (segundos). Si no está, comportamiento original (sin límite = exacto).
+    _tl_raw = os.environ.get("KM_MILP_TIME_LIMIT", "").strip()
+    time_limit = float(_tl_raw) if _tl_raw else None
+
     try:
-        result = clustering_with_size_constraints(x_mat, target)
+        result = clustering_with_size_constraints(x_mat, target, time_limit=time_limit)
     except Exception as e:  # pylint: disable=broad-exception-caught
         logger.warning("Error en KM-MILP para %s: %s", dataset_name, e)
         return None
@@ -300,6 +355,14 @@ def run_clustering_row(
     hp:        dict[str, Any] = result["hyperparams"]
     y_int                  = (y_factor.codes + 1).astype(int)
     total_time             = time.perf_counter() - start_total
+
+    # Si se usó la incumbente (límite de tiempo), lo dejamos registrado en un
+    # sidecar (NO cambia el esquema del CSV) para tu nota de fidelidad: así sabes
+    # exactamente qué resultados de KM-MILP son aproximados y cuáles exactos.
+    if hp.get("solution_type") == "incumbent":
+        _registrar_incumbente(dataset_name, n, k, total_time, time_limit)
+        logger.warning("KM-MILP %s: solución INCUMBENTE (límite %.0fs), aproximada.",
+                       dataset_name, time_limit or 0.0)
 
     # Pre-cálculo de la matriz de distancia N×N (reusada para silhouette,
     # igual que el R original con su comentario "reuse instead of recomputing")

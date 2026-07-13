@@ -12,13 +12,10 @@ scikit-learn>=1.3
 # Paralelismo y caché
 joblib>=1.3
 
-# Acceso a datasets de OpenML
-openml>=0.14
-
 # Medición de memoria y CPU
 psutil>=5.9
 
-# Visualización (opcional, útil para verificar resultados)
+# Visualización (verificar resultados)
 matplotlib>=3.7
 
 openpyxl

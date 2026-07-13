@@ -1,14 +1,7 @@
 """
-algorithms/aco.py
+K-MeansACO
 =================
-ACO (Ant Colony Optimization) para clustering con cardinalidad fija.
-
-** VERSIÓN CON FEROMONAS FUNCIONALES **
-
-A diferencia de la versión anterior (que era un "random restart" sin memoria
-entre iteraciones), aquí las hormigas CONSTRUYEN su solución guiadas por una
-matriz de feromonas tau[N, K] que se actualiza al final de cada iteración.
-Hay, por tanto, memoria colectiva real entre iteraciones.
+ACO (Ant Colony Optimization).
 
 Estructura del algoritmo:
   - 50 hormigas, 20 iteraciones
@@ -26,8 +19,6 @@ Estructura del algoritmo:
     (las mejores hormigas de la iteración y la mejor global depositan feromona)
   - Al final aplica adjust_cardinality a la mejor solución encontrada
 
-Nota de rendimiento: esta versión corre K-Means UNA sola vez (para sembrar la
-heurística inicial), no 1000 veces como la anterior, así que además es más rápida.
 """
 
 from __future__ import annotations
@@ -35,7 +26,6 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Optional
 
 import numpy as np
@@ -60,7 +50,7 @@ if not logger.handlers:
 
 
 # ============================================================================
-# Hiperparámetros y rutas de salida
+# Hiperparámetros
 # ============================================================================
 
 @dataclass
@@ -91,10 +81,6 @@ ACO_HYPERPARAMS: dict[str, Any] = {
     "runs":   {},
 }
 
-# La ruta de salida se obtiene en runtime via get_predictions_dir()
-# de _common, que lee la env var CLUSTERING_MODEL seteada por testing.py.
-
-
 # ============================================================================
 # Heurística: distancia coseno punto -> centroide
 # ============================================================================
@@ -107,7 +93,6 @@ def _cosine_dist_to_centroids(
     """
     Distancia coseno (N x K) de cada punto a cada centroide.
 
-    dist_coseno(x, c) = 1 - (x . c) / (||x|| ||c||), en el rango [0, 2].
     """
     xn = x_mat / (np.linalg.norm(x_mat, axis=1, keepdims=True) + eps)
     cn = centroids / (np.linalg.norm(centroids, axis=1, keepdims=True) + eps)
@@ -125,7 +110,7 @@ def _heuristic_from_centroids(
 
     Cuanto más cerca está el punto i del centroide j, mayor es eta.
     Se normaliza por el máximo global para mantener magnitudes acotadas
-    (evita overflow al elevar a beta).
+
     """
     dist_pc = _cosine_dist_to_centroids(x_mat, centroids)
     eta = 1.0 / (dist_pc + eps)
@@ -149,7 +134,7 @@ def _construct_solution(
 
     Para cada punto (en orden aleatorio) elige un cluster con probabilidad
     proporcional a `desirability[i, :]`, pero solo entre clusters que aún
-    tienen capacidad disponible (cardinalidad objetivo). Como la suma de las
+    tienen capacidad disponible. Como la suma de las
     cardinalidades objetivo es N (es la distribución real de clases), cada
     hormiga produce una solución EXACTAMENTE factible.
 
@@ -234,7 +219,7 @@ def _update_pheromones(
 
 
 # ============================================================================
-# Centroides iniciales (siembra de la heurística vía K-Means, 1 sola vez)
+# Centroides iniciales (siembra de la heurística vía K-Means)
 # ============================================================================
 
 def _initial_kmeans(
@@ -249,8 +234,6 @@ def _initial_kmeans(
       - centroids: K x D, para sembrar la heurística de la iteración 1
       - labels:    N, etiquetas 1-indexadas, para sembrar la mejor solución inicial
 
-    K-Means es un optimizador fuerte de clustering; usar su resultado como
-    candidata inicial garantiza que ACO nunca devuelva algo peor que K-Means.
     """
     km = KMeans(
         n_clusters=k,
@@ -258,7 +241,7 @@ def _initial_kmeans(
         max_iter=kmeans_iter_max,
         random_state=int(rng.integers(0, 2**31 - 1)),
     )
-    labels = km.fit_predict(x_mat).astype(int) + 1     # 1-indexado
+    labels = km.fit_predict(x_mat).astype(int) + 1
     centroids = np.asarray(km.cluster_centers_, dtype=float)
     return centroids, labels
 
@@ -283,7 +266,7 @@ def run_aco_algorithm(
     kmeans_iter_max:   int   = 30,
     master_seed:       int   = 123,
 ) -> dict[str, Any]:
-    """ACO con feromonas funcionales, heurística por centroides y construcción capacitada."""
+    """ACO con feromonas, heurística por centroides y construcción capacitada."""
     rng   = np.random.default_rng(master_seed)
     x_mat = np.asarray(x_mat, dtype=float)
     n     = int(x_mat.shape[0])
@@ -477,7 +460,7 @@ def run(odatasets_unique: pd.DataFrame) -> None:
             else:
                 print("Dataset skipped.")
 
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except Exception as e:
             print(f"Error: {e}")
 
     if results:
